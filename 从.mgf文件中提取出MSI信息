@@ -1,0 +1,109 @@
+import pandas as pd
+import os
+import glob
+from pathlib import Path
+from tqdm import tqdm
+
+
+def process_data():
+    """Process multiple CSV files containing mass spectrometry data and merge them into a single file."""
+    # 1. Set input/output paths (generic)
+    input_dir = Path("path/to/input_directory")  # Directory containing CSV files
+    output_path = Path("path/to/output/merged_spectral_data.csv")  # Output file path
+
+    # 2. Find and process all CSV files
+    all_files = glob.glob(str(input_dir / "*.csv"))
+    dfs = []
+
+    # 2.1 Process files with progress bar
+    for file in tqdm(all_files, desc="Processing files"):
+        try:
+            df = pd.read_csv(file)
+            filename = os.path.basename(file)
+
+            # 2.2 Identify peak intensity column (flexible naming)
+            peak_col = next((col for col in df.columns
+                           if any(kw in col.lower() for kw in ["height", "intensity"])), None)
+
+            if not peak_col:
+                print(f"Skipping {filename}: No peak intensity column found")
+                continue
+
+            # 2.3 Select and rename relevant columns
+            processed = df[["row m/z", "row retention time", peak_col]].copy()
+            processed["Source File"] = filename
+            processed.rename(columns={
+                peak_col: "Peak Height",
+                "row m/z": "m/z",
+                "row retention time": "Retention Time"
+            }, inplace=True)
+            dfs.append(processed)
+
+        except Exception as e:
+            print(f"Error processing {filename}: {str(e)}")
+            continue
+
+    if not dfs:
+        return "Error: No valid files were processed"
+
+    # 3. Merge and deduplicate data
+    merged = pd.concat(dfs, ignore_index=True)
+
+    # 3.1 Group similar m/z and RT values (accounting for small measurement variations)
+    merged["mz_group"] = merged["m/z"].round(3)  # ±0.001 m/z tolerance
+    merged["rt_group"] = merged["Retention Time"].round(1)  # ±0.1 min tolerance
+
+    # 3.2 Keep highest peak in each group
+    dedup = merged.sort_values("Peak Height", ascending=False
+                             ).drop_duplicates(["mz_group", "rt_group"], keep="first")
+
+    # 4. Save results
+    dedup.drop(columns=["mz_group", "rt_group"], inplace=True)
+    dedup.sort_values(["m/z", "Retention Time"], inplace=True)
+    dedup.to_csv(output_path, index=False)
+
+    return f"Processing complete! Results saved to: {output_path}"
+
+
+if __name__ == "__main__":
+    print(process_data())
+import pandas as pd
+import os
+import glob
+from pathlib import Path
+from tqdm import tqdm
+
+
+def process_data():
+    """Process multiple CSV files containing mass spectrometry data and merge them into a single file."""
+    # 1. Set input/output paths (generic)
+    input_dir = Path("path/to/input_directory")  # Directory containing CSV files
+    output_path = Path("path/to/output/merged_spectral_data.csv")  # Output file path
+
+    # 2. Find and process all CSV files
+    all_files = glob.glob(str(input_dir / "*.csv"))
+    dfs = []
+
+    # 2.1 Process files with progress bar
+    for file in tqdm(all_files, desc="Processing files"):
+        try:
+            df = pd.read_csv(file)
+            filename = os.path.basename(file)
+
+            # 2.2 Identify peak intensity column (flexible naming)
+            peak_col = next((col for col in df.columns
+                           if any(kw in col.lower() for kw in ["height", "intensity"])), None)
+
+            if not peak_col:
+                print(f"Skipping {filename}: No peak intensity column found")
+                continue
+
+            # 2.3 Select and rename relevant columns
+            processed = df[["row m/z", "row retention time", peak_col]].copy()
+            processed["Source File"] = filename
+            processed.rename(columns={
+                peak_col: "Peak Height",
+                "row m/z": "m/z",
+                "row retention time": "Retention Time"
+            }, inplace=True)
+            dfs.append(processed)
